@@ -1,0 +1,114 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model role {
+  id         Int               @id @default(autoincrement())
+  roleName   String
+  createdAt  DateTime          @default(now())
+  UpdatedAt  DateTime          @updatedAt
+  permission role_permission[]
+}
+
+model permission {
+  id         Int               @id @default(autoincrement())
+  permission String
+  createdAt  DateTime          @default(now())
+  UpdatedAt  DateTime          @updatedAt
+  roles      role_permission[]
+}
+
+model role_permission {
+  id            Int        @id @default(autoincrement())
+  role_id       Int
+  permission_id Int
+  is_active     Boolean
+  createdAt     DateTime   @default(now())
+  UpdatedAt     DateTime   @updatedAt
+  permission    permission @relation(fields: [permission_id], references: [id])
+  role          role       @relation(fields: [role_id], references: [id])
+
+  @@index([permission_id], map: "role_permission_permission_id_fkey")
+  @@index([role_id], map: "role_permission_role_id_fkey")
+}
+
+model img {
+  id          Int      @id @default(autoincrement())
+  url         String   @unique
+  altext      String?  @default("Thanks for watching!")
+  createdAt   DateTime @default(now())
+  UpdatedAt   DateTime @updatedAt
+  description String   @default("This is an image")
+  title       String   @default("Image")
+  userId      Int?
+  cmt         cmt[]
+  Saved       saveImage[]
+  user        user?    @relation(fields: [userId], references: [id])
+  createdBy   Json     @default("{}")
+  commentBy   Json     @default("{}")
+  @@index([userId], map: "img_userId_fkey")
+}
+model saveImage {
+  id        Int   @id @default(autoincrement())
+  image_id   Int @unique
+  user_id    Int
+  isSave    Boolean @default(false)
+  user user?   @relation(fields: [user_id], references: [id])
+  img img? @relation(fields: [image_id], references: [id])
+}
+model cmt {
+  id        Int      @id @default(autoincrement())
+  content   String
+  userId    Int
+  Img_id    Int
+  createdBy Json @default("{}")
+  UpdatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+  img       img      @relation(fields: [Img_id], references: [id])
+  user      user?     @relation(fields: [userId], references: [id])
+
+  @@index([Img_id], map: "cmt_Img_id_fkey")
+  @@index([userId], map: "cmt_userId_fkey")
+}
+
+model post {
+  id        Int      @id @default(autoincrement())
+  title     String
+  content   String
+  userId    Int
+  UpdatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+  user      user     @relation(fields: [userId], references: [id], map: "Post_userId_fkey")
+
+  @@index([userId], map: "Post_userId_fkey")
+}
+
+model profile {
+  id        Int      @id @default(autoincrement())
+  name      String
+  userId    Int      @unique(map: "Profile_userId_key")
+  email     String
+  UpdatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+  user      user     @relation(fields: [userId], references: [id], map: "Profile_userId_fkey")
+}
+
+model user {
+  id        Int      @id @default(autoincrement())
+  name      String
+  email     String
+  password  String
+  UpdatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+  role      String
+  cmt       cmt[]
+  img       img[]
+  post      post[]
+  profile   profile?
+  saveImage saveImage[]
+}
