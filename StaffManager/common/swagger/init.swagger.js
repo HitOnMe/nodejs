@@ -25,7 +25,8 @@ const swagger = {
     },
     paths: {
        ...pathSwagger.auth,
-       ...pathSwagger.image
+       ...pathSwagger.image,
+       ...pathSwagger.comment
     },
 }
 

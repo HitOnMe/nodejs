@@ -5,7 +5,7 @@ import fs from 'fs';
 import userController from '../controller/user.controller.js';
 import authController from '../controller/auth.controller.js';
 
-const imageRouter = express.Router();
+const image = express.Router();
 
 
 const uploadDir = path.join(process.cwd(), 'uploads', 'image');
@@ -23,10 +23,8 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 // API CRUD 
-imageRouter.post("/image/upload", authController.protect, upload.single('file'), userController.createImage);
-imageRouter.post("/image/comments/:id", userController.createComment)
-imageRouter.get('/image/:id', userController.getImage);
-imageRouter.get('/saved-image/list', userController.getListImage);
-imageRouter.get('/saved-image/list/:id',  authController.protect, authController.listImageById)
-imageRouter.get('/saved-image/list/:id', authController.savedImage)
-export default imageRouter;
+image.post("/image/upload", authController.protect, authController.checkPermission, upload.single('file'), userController.createImage);
+image.get('/image/get-image/:id', authController.protect, authController.checkPermission, userController.getImage);
+image.get('/image/list-image', authController.protect, authController.checkPermission, userController.getListImage);
+image.get('/image/saved-image/list',  authController.protect, authController.listImageById)
+export default image

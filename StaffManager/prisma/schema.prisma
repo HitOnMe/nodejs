@@ -48,7 +48,7 @@ model img {
   userId      Int?
   cmt         cmt[]
   Saved       saveImage[]
-  user        user?    @relation(fields: [userId], references: [id])
+  user        user?    @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdBy   Json     @default("{}")
   commentBy   Json     @default("{}")
   @@index([userId], map: "img_userId_fkey")
@@ -58,8 +58,8 @@ model saveImage {
   image_id   Int @unique
   user_id    Int
   isSave    Boolean @default(false)
-  user user?   @relation(fields: [user_id], references: [id])
-  img img? @relation(fields: [image_id], references: [id])
+  user user?   @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  img img? @relation(fields: [image_id], references: [id], onDelete: Cascade)
 }
 model cmt {
   id        Int      @id @default(autoincrement())
@@ -69,8 +69,8 @@ model cmt {
   createdBy Json @default("{}")
   UpdatedAt DateTime @updatedAt
   createdAt DateTime @default(now())
-  img       img      @relation(fields: [Img_id], references: [id])
-  user      user?     @relation(fields: [userId], references: [id])
+  img       img      @relation(fields: [Img_id], references: [id], onDelete: Cascade)
+  user      user?     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([Img_id], map: "cmt_Img_id_fkey")
   @@index([userId], map: "cmt_userId_fkey")
@@ -83,19 +83,24 @@ model post {
   userId    Int
   UpdatedAt DateTime @updatedAt
   createdAt DateTime @default(now())
-  user      user     @relation(fields: [userId], references: [id], map: "Post_userId_fkey")
+  user      user     @relation(fields: [userId], references: [id], map: "Post_userId_fkey", onDelete: Cascade)
 
   @@index([userId], map: "Post_userId_fkey")
 }
 
 model profile {
   id        Int      @id @default(autoincrement())
+  userId Int @default(1) @unique
   name      String
-  userId    Int      @unique(map: "Profile_userId_key")
   email     String
+  phone_number  Int
+  adress    String
+  avatar    String?
+  role      String
+  certification Json
   UpdatedAt DateTime @updatedAt
   createdAt DateTime @default(now())
-  user      user     @relation(fields: [userId], references: [id], map: "Profile_userId_fkey")
+  user        user?    @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model user {
@@ -109,6 +114,6 @@ model user {
   cmt       cmt[]
   img       img[]
   post      post[]
-  profile   profile?
   saveImage saveImage[]
+  profile profile?
 }

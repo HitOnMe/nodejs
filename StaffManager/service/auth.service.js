@@ -5,11 +5,11 @@ import {responseError, responseSuccess, handleSuccess} from '../common/helper/re
 import jwt from 'jsonwebtoken';
 import {TOKENSECRET, ACCESSEXPIRE, REFRESHEXPIRE} from '../common/constants/constants.js'
 import sendMail from '../common/nodemailder/sendmail.js';
+import { USER, CUSTOMER, ADMIN } from '../common/constants/constants.js';
 export const authService = {
     protect: async(req) => {
-    
+       
         const token = req.headers['x-api-key']
-        console.log(token)
         if(!token){
             throw new BadRequestException('Không có quyền')
         }
@@ -17,7 +17,7 @@ export const authService = {
 
         const user = await prisma.user.findFirst({
             where: {
-                id: isUserValid.id
+                id: isUserValid.data.id
             }
         })
         if(!user){
@@ -26,13 +26,24 @@ export const authService = {
         req.user = user
         delete(req.user.password)
     },
-    checkPermission: async(req, role) => {
-        const user = await prisma.user.findFirst({
-            where: {
-                email: req.body.email
-            }
-        })
-        return user.role === role
+    checkPermission: async(req) => {
+        let checkPermision = false;
+        switch(req.user.role){
+            case 'USER': checkPermision = await authService.permission(req, USER);
+            break;
+            case 'ADMIN': checkPermision = await authService.permission(req, ADMIN);
+            break;
+            default: checkPermision = await authService.permission(req, CUSTOMER);
+        }
+        if(!checkPermision){
+            throw new BadRequestException('Không có quyền!')
+        }
+    },
+    permission: async(req, role) => {
+        const RouteMethod = req.method
+        const RouteModel = req.route.path.split("/")[1] ;
+        console.log(role[RouteModel])
+        return role[RouteModel][RouteMethod]
     },
     getUser: async(req) => {
         return await prisma.user.findMany()
@@ -55,36 +66,22 @@ export const authService = {
         sendMail(req.body.email).catch(console.error)
         
     },
-    login: async(req, role) => {
-        //Check email if exists
-        const mailExist = await authService.checkEmail(req)
-        //Check role
-
-        if(!mailExist){
-            throw new BadRequestException('Tài khoản không tồn tại! Vui lòng đăng ký')
+    login: async(req, user) => {
+        const IsvalidPassword =  await bcrypt.compare(req.body.password, user.password)
+        if(!IsvalidPassword){
+            throw new BadRequestException('Đăng nhập thất bại!')
         }
-        const user =await  prisma.user.findFirst({
-            where:{
-                email: req.body.email,
-            }
-        })
-     
-            const IsvalidPassword =  await bcrypt.compare(req.body.password, user.password)
-            if(!IsvalidPassword){
-                throw new BadRequestException('Đăng nhập thất bại!')
-            }
-            delete(req.body.password)
+        delete(req.body.password)
         const data = { id: user.id, ...req.body, role: user.role}
         const accessToken =  await authService.createToken(data, 'accessToken')
         const refreshToken =  await authService.createToken(data, '')
         const token = {accessToken, refreshToken}
-            
         return token
     },
     delete_user: async(req) => {
         const user = await authService.checkuser(req)
-        if(user.id === 1) {
-            throw new BadRequestException('Không có quyền!')
+        if(user.id === req.user.id){
+           throw new BadRequestException('You have already connected!')
         }
         return await prisma.user.delete({
             where:{
@@ -100,34 +97,75 @@ export const authService = {
             where:{
                 id: +req.params.id
             },
-            data: req.body
+            data: {
+                role: user.role === 'USER' ? 'ADMIN' : 'USER'
+            }
         })
     },
     listImageById: async(req) => {
-        return await prisma.img.findMany({
+        const user = await prisma.user.findMany({
             where: {
-                userId: +req.params.id
+                id: +req.user.id
+            },
+            include: {
+                saveImage: {
+                    where: {
+                        isSave: true
+                    }
+                }
             }
         })
+        console.log(user)
+        if(user[0].saveImage.length === 0){
+            throw new BadRequestException('Bạn chưa lưu ảnh nào!')
+        }
+        const imageInfo = await prisma.img.findFirst({
+            where: {
+                id: user[0].saveImage.image_id
+            }
+        })
+        user[0].saveImage = [{
+            image_id: user[0].saveImage.image_id,
+            image_info: imageInfo
+        }
+        ]
+        return user
     },
     save_image: async(req) => {
-       
+        const image = await prisma.img.findFirst({
+            where: {
+                id: +req.params.id
+            }
+        })
+        if(!image){
+            throw new BadRequestException('Ảnh này không tồn tại')
+        }
         const isImageSave = await prisma.saveImage.findFirst({
             where: {
                 image_id: +req.params.id,
-                isSave:true
             }
         })
-        if(isImageSave){
+        if(isImageSave.isSave){
             throw new BadRequestException('Ảnh này đã được lưu trước đó')
         }
-        const data = {
-            image_id : +req.params.id,
-            user_id: req.user.id,
-            isSave: true
+        if(!isImageSave){
+            return await prisma.saveImage.create({
+                data: {
+                    image_id: image.id,
+                    user_id: req.user.id,
+                    isSave: true
+                }
+            })
         }
-        return await prisma.saveImage.create({
-            data: data
+        return await prisma.saveImage.update({
+            where: {
+                image_id: +req.params.id,
+            },
+            data: {
+                image_id: image.id,
+                user_id: req.user.id,
+                isSave: true
+            }
         })
     },
     unSaveImage: async(req) => {
@@ -160,6 +198,7 @@ export const authService = {
         if(!image){
             throw new BadRequestException('Không tìm thấy ảnh!')
         }
+       
         return await prisma.img.delete({
             where: {
                 id: +req.params.id
@@ -167,22 +206,14 @@ export const authService = {
         })
     },
     checkSavedImage: async(req, res) =>{
-        const isUserExist = await prisma.user.findFirst({
-            where: {
-                id: +req.params.id
-            }
-        })
-        if(!isUserExist){
-            throw new BadRequestException('User này không tồn tại!')
-        }
         const listSavedImage = await prisma.saveImage.findMany({
             where: {
                 user_id: +req.params.id,
                 isSave: true
             }
         })
-        if(listSavedImage.length === 0) {
-            throw new BadRequestException('User này không có ảnh lưu')
+        if(!listSavedImage=== 0){
+            throw new BadRequestException('Không có ảnh!')
         }
         return listSavedImage
     },
@@ -250,22 +281,45 @@ export const authService = {
     },
     
     getProfile: async(req) => {
-       return await prisma.profile.findFirst({
+       const profile =  await prisma.profile.findFirst({
             where:{
-                id: req.params.id
+                id: +req.user.id,
             }
        })
+       if(!profile){
+        throw new BadRequestException('Không tìm thấy profile!')
+       }
+       return profile
     },
     commitProfile: async(req) => {
+        const {name, email} = req.user
+        const{phone_number, adress, avatar, role, certification} = req.body
         return await prisma.profile.create({
-            data: req.body
+            data: {
+                name: name,
+                email: email,
+                adress: adress,
+                phone_number: phone_number,
+                avatar: avatar,
+                role: role,
+                certification: certification
+            }
         })
     },
     updateProfile: async(req) => {
-    
+        
+        const profile = await prisma.profile.findFirst({
+            where: {
+                id: +req.user.id
+            },
+       
+        })
+        if(!profile){
+            throw new BadRequestException('Không tìm thấy profile!')
+           }
         return await prisma.profile.update({
             where: {
-                id: req.params.id
+                id: +req.user.id
             },
             data: req.body
         })

@@ -51,7 +51,8 @@ const authController = {
     },
     user_login: async(req, res,next) => {
         try{
-           const token = await authService.login(req, 'USER')
+           const user =  await authService.checkEmail(req)
+           const token = await authService.login(req, user)
            res.set('accessToken', token.accessToken)
            res.set('refreshToken', token.refreshToken)
            return handleSuccess(res, req.body, 'Đăng nhập thành công')
@@ -60,12 +61,15 @@ const authController = {
         }
     },
     admin_login: async(req, res,next) => {
-        try{
-            const isAdmin =  await authService.checkPermission(req, "ADMIN")
-            if(!isAdmin){
+        try{    
+            const user = await authService.checkEmail(req)
+            if(user.role!== 'ADMIN'){
                 throw new BadRequestException('Tài khoản không tồn tại!')
             }
-            const token = await authService.login(req, 'ADMIN')
+            const token = await authService.login(req, user)
+            if(!token){
+                throw new BadRequestException('Tài khoản không tồn tại!')
+            }
             res.set('accessToken', token.accessToken)
             res.set('refreshToken', token.refreshToken)
             return handleSuccess(res, req.body, 'Đăng nhập thành công')
@@ -119,19 +123,10 @@ const authController = {
             next(error)
         }
     },
-    savedImage: async(req, res, next)=> {
-        try{
-             const user = await authService.checkSavedImage(req)
-             return handleSuccess(res, user, 'Lưu ảnh thành công!')
-        }catch(error){
-            console.log(error)
-            next(error)
-        }
-    },
     listImageById: async(req, res, next)=> {
         try{
-             const user = await authService.listImageById(req)
-             return handleSuccess(res, user, 'Lấy danh sách ảnh thành công!')
+             const image = await authService.listImageById(req)
+             return handleSuccess(res, image, 'Lấy danh sách ảnh thành công!')
         }catch(error){
             next(error)
         }
@@ -155,24 +150,24 @@ const authController = {
     },
     getProfile: async(req, res, next) => {
         try{
-            await authService.getProfile(req)
-            return handleSuccess(res, req.body, 'Lấy profile thành công')
+            const data = await authService.getProfile(req)
+            return handleSuccess(res, data, 'Lấy profile thành công')
         } catch(error) {
             next(error)
         }
     },
     commitProfile: async(req, res, next) => {
         try{
-            await authService.commitProfile(req)
-            return handleSuccess(res, req.body, 'Tạo profile thành công')
+            const profile = await authService.commitProfile(req)
+            return handleSuccess(res, profile, 'Tạo profile thành công')
         } catch(error) {
             next(error)
         }
     },
     updateProfile: async(req, res, next) => {
         try {
-            await authService.updateProfile(req)
-            return handleSuccess(res, req.body, 'update Profile thành công')
+            const data = await authService.updateProfile(req)
+            return handleSuccess(res, data, 'update Profile thành công')
         } catch(error) {
        
             next(error)
@@ -183,6 +178,7 @@ const authController = {
             await authService.checkPermission(req)
             next()
         } catch(error){
+            console.log(error)
             next(error)
         }
     }
